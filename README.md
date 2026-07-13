@@ -1,4 +1,4 @@
-Asynchronous C++ epoll Server & eBPF Kernel Latency Profiler
+### Asynchronous C++ epoll Server & eBPF Kernel Latency Profiler
 
 This repository contains a dual-perspective systems observability project designed to isolate and measure Queueing Delay in high-throughput network applications. 
 
@@ -6,47 +6,15 @@ By combining a C++20 asynchronous reactor-pattern server with a kernel-level eBP
 
 Traditional network metrics (like Round Trip Time) lump transport delay and application delay together. This tool defines this boundary, exposing hidden queueing delays that traditional tools miss.
 
-Design
-
-                  [ CLIENT ]
-                      │ (TCP Packet)
-                      ▼
-┌────────────────── KERNEL SPACE (TCP Stack) ──────────────────┐
-│                                                              │
-│  1. Packet Landed ──────► [tcp_rcv_established] ◄── [Probe]  │
-│                                │ (Saves Start Time in Hashmap)│
-│                                ▼                             │
-│                     Kernel Socket Buffer                     │
-│                                │                             │
-│  2. Socket Ready ──────► Kernel Signals epoll                │
-│                                                              │
-└───────────────────────────────┼──────────────────────────────┘
-                                │ (epoll_wait wakes up)
-┌────────────────── USER SPACE (C++ Service) ──────────────────┐
-│                               ▼                              │
-│                      [epoll Dispatcher]                      │
-│                               │                              │
-│                               ▼                              │
-│                    [ThreadPool Task Queue] ─── (Queue Delay) │
-│                               │                              │
-│                               ▼                              │
-│    3. Worker Wakeup ────► [recv()] ◄─────────────── [Probe]  │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-                                                      │
-                                                      ▼
-                                       eBPF RingBuffer Event
-                                       (Queueing Delay Calculated)
-
 To prove telemetry correctness, AeroTrace captures latency from two separate paths:
 
 User-Space: When the epoll dispatcher accepts an event, it stamps enqueueDelta using std::chrono. A thread-pool worker thread then calculates the delta right before calling recv(), storing it in a lock-free, thread-local LatencyRing buffer.
 
 Kernel-Space: An eBPF program hooks the kernel functions tcp_rcv_established and tcp_recvmsg using kprobes. It matches socket pointers (struct sock *) in a BPF Hash Map to compute nanosecond-precise delta times, streaming them via a BPF Ring Buffer to a user-space logger.
 
-Systems Engineering Concepts
+## Systems Engineering Concepts
 
-1. Asynchronous Multiplexing & Resource Optimization
+# 1. Asynchronous Multiplexing & Resource Optimization
 
 Reactor Pattern (epoll): Leverages Linux epoll to manage and multiplex non-blocking socket file descriptors, eliminating the high CPU overhead of thread-per-connection models.
 
@@ -54,23 +22,23 @@ Race Condition Mitigation (EPOLLONESHOT): Utilizes oneshot epoll flags to disabl
 
 Low-Level Socket Fast Reset: Implements SO_REUSEADDR to bypass TIME_WAIT lockups for fast debugging cycles, sets socket state to O_NONBLOCK via direct POSIX fcntl flags, and configures the connection backlog limit to the kernel defined maximum (SOMAXCONN).
 
-2. High-Performance Concurrency (C++20)
+# 2. High-Performance Concurrency (C++20)
 
 Custom Generic ThreadPool: Avoids expensive thread creation overhead by pre-allocating worker threads. Synchronizes tasks inside a shared std::queue<std::function<void()>> protected by a std::mutex and coordinated efficiently using std::condition_variable to keep idle threads asleep.
 
 Thread-Local Storage (TLS) Registry: Worker threads record statistics to separate, non-overlapping LatencyRing instances using lock-free atomic indices (std::memory_order_relaxed). A global static registry allows main threads to safely drain and collect all statistics without acquiring a single hot lock during runtime.
 
-3. eBPF & Kernel Instrumentation
+# 3. eBPF & Kernel Instrumentation
 
 Structure Traversal with CO-RE: Employs BPF CO-RE (BPF_CORE_READ) to traverse deeply nested, version-dependent kernel structures (casting from struct sock * to struct sock_common *) to extract the exact TCP destination port (skc_dport) safely.
 
 Context Preservation: Uses a high-throughput BPF Hash Map (BPF_MAP_TYPE_HASH) to associate connection state across asymmetric asynchronous system calls (tcp_rcv_established -> tcp_recvmsg).
 
-Testing
+## Testing
 
 The validation strategy proves precision using a deterministic Flaw-Injection Pipeline. By introducing artificial thread stalls, we can prove the eBPF profiler isolates internal queueing delays from network transit times.
 
-Test 1: The Baseline Latency Test
+# Test 1: The Baseline Latency Test
 
 Objective: Measure the inherent system overhead and queueing delay of the ThreadPool and epoll loop under idle/low-stress conditions.
 
@@ -78,13 +46,13 @@ Method: Run the server and profile its latency under a single, non-delayed reque
 
 Expectation: Delays should be extremely lean (measured in microseconds).
 
-# Terminal 1: Run eBPF Profiler
+Terminal 1: Run eBPF Profiler
 sudo ./profiler
 
-# Terminal 2: Run C++ Server
+Terminal 2: Run C++ Server
 ./server
 
-# Terminal 3: Send single packet
+Terminal 3: Send single packet
 echo "test" | nc localhost 9090
 
 
@@ -93,7 +61,7 @@ Expected output in Profiler Terminal:
 delta 14850 ns  (14.85 us)
 
 
-Test 2: The High-Throughput Stress Test
+# Test 2: The High-Throughput Stress Test
 
 Objective: Measure the distribution curve (p50, p95, p99 tail latencies) when the thread pool queue is saturated by our custom epoll load client (load_server.cpp).
 
@@ -101,7 +69,7 @@ Method: Run the asynchronous load server to fire 10,000 requests split over 100 
 
 Expectation: p95/p99 tail latencies will reflect lock contention and dispatcher scheduling intervals.
 
-# Run server & load client
+Run server & load client
 ./server
 ./load_server 127.0.0.1 9090 100 100
 
@@ -125,7 +93,7 @@ count=10000
  p99=1446.38us
  max=1958.71us
  
-Test 3: Deterministic Flaw Injection (The Proof)
+# Test 3: Deterministic Flaw Injection (The Proof)
 
 Objective: Scientifically prove that the eBPF profiler accurately measures user-space thread queuing delay rather than raw transit times.
 
@@ -149,7 +117,7 @@ delta 110750ns  (110.75 us)
 
 This test successfully proves the telemetry pipeline is correct. Because the packet landed in the socket buffer but sat unconsumed while the worker thread was stalled, the profiler isolated and reported the exact 50ms queuing delay.
 
-⚙️ Compilation & Execution Guide
+## Compilation & Execution Guide
 
 Prerequisites
 
@@ -189,7 +157,7 @@ sudo ./profiler
 ./load_server 127.0.0.1 9090 50 200
 
 
-Credits & Attributions
+## Credits & Attributions
 
 libbpf & libbpf-bootstrap: Provided the foundational compiler scaffolding, BPF ring-buffer bindings, and the critical skeleton generator (bpftool) that enables CO-RE (Compile Once – Run Everywhere) capability.
 
