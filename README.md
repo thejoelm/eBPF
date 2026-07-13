@@ -46,19 +46,19 @@ Method: Run the server and profile its latency under a single, non-delayed reque
 
 Expectation: Delays should be extremely lean (measured in microseconds).
 
-Terminal 1: Run eBPF Profiler
-sudo ./profiler
+**Terminal 1: Run eBPF Profiler**
+- sudo ./profiler
 
-Terminal 2: Run C++ Server
-./server
+**Terminal 2: Run C++ Server**
+- ./server
 
-Terminal 3: Send single packet
-echo "test" | nc localhost 9090
+**Terminal 3: Send single packet**
+- echo "test" | nc localhost 9090
 
 
-Expected output in Profiler Terminal:
+**Expected output in Profiler Terminal:**
 
-delta 14850 ns  (14.85 us)
+- delta 14850 ns  (14.85 us)
 
 
 ### Test 2: The High-Throughput Stress Test
@@ -69,11 +69,11 @@ Method: Run the asynchronous load server to fire 10,000 requests split over 100 
 
 Expectation: p95/p99 tail latencies will reflect lock contention and dispatcher scheduling intervals.
 
-Run server & load client
-./server
-./load_server 127.0.0.1 9090 100 100
+**Run server & load client**
+  ./server
+  ./load_server 127.0.0.1 9090 100 100
 
-Expected statistics printed in Load Server:
+**Expected statistics printed in Load Server:**
 
  connections=100
  requests_per_conn=100
@@ -81,11 +81,11 @@ Expected statistics printed in Load Server:
  elapsed=0.0890538s
  req/sec=112292
  
-Expected statistics printed on Server shutdown:
+**Expected statistics printed on Server shutdown:**
 
 queue_delay: count=10100 p50=100us p95=356us p99=669us
 
-Expected statistics printed on Profiler shutdown:
+**Expected statistics printed on Profiler shutdown:**
 
 count=10000
  p50=178.042us
@@ -110,7 +110,7 @@ threadpool.enqueue([clientFd, epollFd, enqueueDelta]() {
 });
 
 
-Actual Profiler Output during Flaw Injection:
+**Actual Profiler Output during Flaw Injection:**
 
 delta 110750ns  (110.75 us)
 
@@ -119,7 +119,7 @@ This test successfully proves the telemetry pipeline is correct. Because the pac
 
 ## Compilation & Execution Guide
 
-Prerequisites
+**Prerequisites**
 
 Linux OS with kernel version 5.15+ (with CONFIG_DEBUG_INFO_BTF=y).
 
@@ -127,7 +127,7 @@ clang, llvm, libelf, and libbpf installed.
 
 On macOS hosts, utilize a Lima VM running an ARM64/x86_64 Ubuntu instance matching the host architecture.
 
-Compilation
+**Compilation**
 
 Build the C++ server stack, the custom load client, and the eBPF kernel skeleton:
 
